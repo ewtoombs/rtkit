@@ -65,21 +65,66 @@ WHY:
 
 
 CLIENTS:
-        To be able to make use of realtime scheduling clients may
-        request so with a small D-Bus interface that is accessible on
-        the interface org.freedesktop.RealtimeKit1 as object
-        /org/freedesktop/RealtimeKit1 on the service
-        org.freedesktop.RealtimeKit1:
+        A BSD-licensed reference implementation of the client is
+        available in rtkit.[ch] as part of the package. If you just
+        want rtkit realtime scheduling and don't care about the details,
+        you may copy these files into your source tree, then run this
+        function to enable realtime scheduling:
+
+        <snip>
+        if (rtkit_realtime_simple() < 0) {
+                fprintf(stderr, "Failed to switch to realtime scheduling.\n");
+        }
+        </snip>
+
+        This implementation depends on dbus. Run
+
+        pkgconf --cflags dbus-1
+
+        for the C flags necessary for compiling and
+
+        pkgconf --libs dbus-1
+
+        for the libs necessary for linking.
+
+        However, given how simple the D-Bus interface is, you might
+        choose to implement your own client implementation.
+
+ADVANCED CLIENTS:
+        Clients communicate with rtkit through a small D-Bus interface:
+
+        service:   org.freedesktop.RealtimeKit1
+        object:    /org/freedesktop/RealtimeKit1
+        interface: org.freedesktop.RealtimeKit1
+
+        This interface has the following properties:
+
+                s32 MaxRealtimePriority;
+
+                s32 MinNiceLevel;
+
+                s64 RTTimeUSecMax;
+
+        To request realtime scheduling, a client calls this method:
 
                 void MakeThreadRealtime(u64 thread_id, u32 priority);
 
-                void MakeThreadHighPriority(u64 thread_id, s32 priority);
+        priority may be any value between 1 and MaxRealtimePriority.
+        Use setrlimit() to set RLIMIT_RTTIME to any value between 1
+        and RTTimeUSecMax before calling this method, or it will fail.
 
-        The thread IDs need to be passed as kernel tids as returned by
-        gettid(), not a pthread_t!  (Please
-        note that gettid() is not available in glibc, you need to
-        implement that manually using syscall(). Consult the reference
-        client implementation for details.)
+        This method merely reduces niceness without changing the
+        scheduling policy:
+
+                void MakeThreadHighPriority(u64 thread_id, s32 nice_level);
+
+        nice_level may be any value between MinNiceLevel and 0.
+
+        In both cases, the thread IDs need to be passed as kernel
+        tids as returned by gettid(), not a pthread_t!  (Please note
+        that gettid() is not available in glibc, you need to implement
+        that manually using syscall(). Consult the reference client
+        implementation for details.)
         
         It is possible to promote thread in process to realtime/high
         priority from another process, that will make the DBUS call,
@@ -87,15 +132,9 @@ CLIENTS:
         
                 void MakeThreadRealtimeWithPID(u64 process, u64 thread_id, u32 priority);
 
-                void MakeThreadHighPriorityWithPID(u64 process, u64 thread_id, s32 priority);
+                void MakeThreadHighPriorityWithPID(u64 process, u64 thread_id, s32 nice_level);
 
         where process is the PID of the process that has thread thread_id.
-        
-        A BSD-licensed reference implementation of the client is
-        available in rtkit.[ch] as part of the package. You may copy
-        this into your sources if you wish. However given how simple
-        the D-Bus interface is you might choose to implement your own
-        client implementation.
 
         It is advisable to try acquiring realtime scheduling with
         sched_setsheduler() first, so that systems where RLIMIT_RTPRIO
